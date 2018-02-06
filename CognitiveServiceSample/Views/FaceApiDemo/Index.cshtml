@@ -1,0 +1,235 @@
+﻿
+
+    <script src="~/Scripts/jquery-1.10.2.min.js"></script>
+    <style>
+        .imgpreview {
+            width: 65%;
+            float: left;
+            border-style: solid;
+            border-color: green;
+            display: block;
+            overflow: scroll;
+            height: 600px;
+        }
+
+        .infodiv {
+            width: 15%;
+            padding-left: 5px;
+            float: left;
+        }
+
+        .label {
+            word-break: break-all;
+        }
+
+        p {
+            font-size: 18px;
+        }
+    </style>
+
+    <div style="padding-bottom: 10px">
+        <h3>Microsoft AI 人臉識別範例</h3>
+        <h5>以機器學習為基礎的臉部特徵預測，提供偵測影像中的人臉，包括：年齡、表情、性別、姿勢、微笑及鬍子等特徵</h5>
+        <label>上傳照片立即辨識: </label>
+        <input type="file" id="imgfile" />
+    </div>
+    <div class="imgpreview">
+        <canvas id="showimg" width="800" height="600"></canvas>
+    </div>
+    <div id="resultinfo" class="infodiv">
+
+    </div>
+    <div class="infodiv" id="faceresult" style="display: none">
+    </div>
+
+    <script>
+
+        var makeblob = function (dataURL) {
+            var base64val = ';base64,';
+            if (dataURL.indexOf(base64val) == -1) {
+                var parts = dataURL.split(',');
+                var contentType = parts[0].split(':')[1];
+                var raw = decodeURIComponent(parts[1]);
+                return new Blob([raw], { type: contentType });
+            }
+            var parts = dataURL.split(base64val);
+            var contentType = parts[0].split(':')[1];
+            var raw = window.atob(parts[1]);
+            var rawLength = raw.length;
+
+            var uInt8Array = new Uint8Array(rawLength);
+
+            for (var i = 0; i < rawLength; ++i) {
+                uInt8Array[i] = raw.charCodeAt(i);
+            }
+
+            return new Blob([uInt8Array], { type: contentType });
+        }
+
+        $(document).ready(
+            function () {
+
+                $("#imgfile").change(function () {
+                    var canvas = document.getElementById("showimg");
+
+                    var maxw = 800;
+                    var maxh = 600;
+
+                    if (canvas.getContext) {
+                        var context = canvas.getContext("2d");
+                        context.clearRect(0, 0, canvas.width, canvas.height);
+                        var face = document.getElementById("imgfile");
+                        var img = new Image;
+                        img.src = URL.createObjectURL(face.files[0]);
+                        img.onload = function () {
+                            var width = img.width;
+                            var height = img.height;
+
+                            //縮圖處理
+                            if (width > height) {
+                                if (width > maxw) {
+                                    height *= maxw / width;
+                                    width = maxw;
+                                }
+                            } else {
+                                if (height > maxh) {
+                                    width *= maxh / height;
+                                    height = maxh;
+                                }
+                            }
+                            canvas.width = width;
+                            canvas.height = height;
+                            context.drawImage(img, 0, 0, width, height);
+                            //人臉辨識
+                            DetectFaces(canvas.toDataURL('image/jpeg', 1));
+                        }
+                    }
+                });
+            });
+
+        function DetectFaces(face) {
+            var apitoken = "your azure token";
+            var params = {
+                // Request parameters
+                "returnFaceId": "true",
+                "returnFaceLandmarks": "false",
+                "returnFaceAttributes": "age,gender,smile,facialHair,headPose,glasses,emotion"
+            };
+            $.ajax({
+                url: "https://southeastasia.api.cognitive.microsoft.com/face/v1.0/detect?" + $.param(params),
+                beforeSend: function (xhrObj) {
+                    // Request headers
+                    xhrObj.setRequestHeader("Content-Type", "application/octet-stream");
+                    xhrObj
+                        .setRequestHeader("Ocp-Apim-Subscription-Key", apitoken);
+                },
+                type: "POST",
+                data: makeblob(face),
+                processData: false
+            })
+                .done(function (data) {
+                    var result = JSON.stringify(data);
+                    $("#faceresult").text(result);
+                    DrawFaceRectangle(data);
+                    ShowInfo(data);
+                })
+                .fail(function (e) {
+                    console.log(e);
+                    alert("Error !! More Detail Pls See F12 Console Log");
+                });
+
+        }
+
+        function DrawFaceRectangle(data) {
+            var canvas = document.getElementById('showimg');
+            if (canvas.getContext) {
+                var context = canvas.getContext('2d');
+                context.lineWidth = 2;
+                context.strokeStyle = 'red';
+                for (var i = 0; i < data.length; i++) {
+                    var facerec = data[i].faceRectangle;
+                    context.strokeRect(facerec.left, facerec.top, facerec.width, facerec.height);
+                    context.fillStyle = 'red';
+                    context.font = "20px Arial";
+                    context.fillText(data[i].faceAttributes.gender, facerec.left, facerec.top + facerec.height + 20);
+                    context.fillText(data[i].faceAttributes.age, facerec.left, facerec.top + facerec.height + 40);
+                    context.fillText(data[i].faceAttributes.smile, facerec.left, facerec.top + facerec.height + 60);
+                }
+            }
+        }
+
+        function ShowInfo(data) {
+            var info = document.getElementById('resultinfo');
+            info.innerHTML = "";
+            var female = 0;
+            var man = 0;
+            var glasses = 0;
+            var noglasses = 0;
+            var anger = 0;
+            var contempt = 0;
+            var disgust = 0;
+            var fear = 0;
+            var happiness = 0;
+            var neutral = 0;
+            var sadness = 0;
+            var surprise = 0;
+
+            for (var i = 0; i < data.length; i++) {
+                var obj = data[i].faceAttributes;
+
+                if (obj.gender == "female")
+                    female++;
+                else
+                    man++;
+
+                if (obj.glasses == "NoGlasses") {
+                    noglasses++;
+                } else {
+                    glasses++;
+                }
+
+                if (obj.emotion.anger > 0.5) {
+                    anger++;
+                }
+
+                if (obj.emotion.contempt > 0.5) {
+                    contempt++;
+                }
+
+                if (obj.emotion.disgust > 0.5) {
+                    disgust++;
+                }
+
+                if (obj.emotion.fear > 0.5) {
+                    fear++;
+                }
+
+                if (obj.emotion.happiness > 0.5) {
+                    happiness++;
+                }
+
+                if (obj.emotion.neutral > 0.5) {
+                    neutral++;
+                }
+
+                if (obj.emotion.sadness > 0.5) {
+                    sadness++;
+                }
+
+                if (obj.emotion.surprise > 0.5) {
+                    surprise++;
+                }
+            }
+            info.innerHTML += "<p>男生：" + man + "</p>";
+            info.innerHTML += "<p>女生：" + female + "</p>";
+            info.innerHTML += "<p>戴眼鏡：" + glasses + "</p>";
+            info.innerHTML += "<p>憤怒：" + anger + "</p>";
+            info.innerHTML += "<p>‎不屑：" + contempt + "</p>";
+            info.innerHTML += "<p>‎厭惡‎：" + disgust + "</p>";
+            info.innerHTML += "<p>‎恐懼‎：" + fear + "</p>";
+            info.innerHTML += "<p>‎‎開心‎‎：" + happiness + "</p>";
+            info.innerHTML += "<p>‎面無表情：" + neutral + "</p>";
+            info.innerHTML += "<p>‎‎悲傷‎：" + sadness + "</p>";
+            info.innerHTML += "<p>‎‎‎驚喜‎：" + surprise + "</p>";
+        }
+    </script>

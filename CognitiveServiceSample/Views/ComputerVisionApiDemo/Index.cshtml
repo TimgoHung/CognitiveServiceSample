@@ -1,0 +1,139 @@
+﻿<style>
+    video {
+        width: 640px;
+        height: 480px;
+    }
+
+    img {
+        width: 640px;
+        height: 480px;
+        display: none;
+    }
+</style>
+<div>
+    <video id="showvideo" src="~/Content/sample3.mp4" preload="auto" autoplay></video>
+</div>
+<hr />
+<div>
+    <div style="float: left;">
+        <img id="videoimg" />
+    </div>
+    <div id="showinfodiv" style="width:480px;height:200px;float: left;">
+    </div>
+</div>
+<script>
+    var video = document.getElementById("showvideo");
+    var videoimg = document.getElementById("videoimg");
+    var showinfodiv = document.getElementById("showinfodiv");
+
+    video.onloadeddata = function () {
+        video.currentTime = 0;
+    };
+
+    video.onseeked = function (e) {
+        FramesImage;
+    };
+
+    var FramesImage = setInterval(function () {
+        var canvas = document.createElement("canvas");
+        var resultinfo = document.createElement("div");
+        var infobox = document.createElement("label");
+
+        var ctx = canvas.getContext("2d");
+        canvas.width = 640;
+        canvas.height = 480;
+        ctx.drawImage(video, 0, 0, 640, 480);
+
+        //computer vision
+        var imgstr = canvas.toDataURL('image/jpeg', 1);
+        videoimg.src = imgstr;
+        ComputerVision2(imgstr);
+
+        if (video.currentTime == video.duration) {
+            clearInterval(FramesImage);
+        }
+    }, 1000);
+
+    function ComputerVision(data) {
+        var apitoken = "your azure ComputerVision api token";
+        return "分析結果";
+    };
+
+    function ComputerVision2(imgdata) {
+        var apitoken = "your azure token";
+        var params = {
+            // Request parameters
+            "visualFeatures": "Categories,Description,Faces,Adult",
+            "details": "Celebrities,Landmarks",
+            "language": "en",
+        };
+        $.ajax({
+            url: "https://southeastasia.api.cognitive.microsoft.com/vision/v1.0/analyze?" + $.param(params),
+            beforeSend: function (xhrObj) {
+                // Request headers
+                xhrObj.setRequestHeader("Content-Type", "application/octet-stream");
+                xhrObj.setRequestHeader("Ocp-Apim-Subscription-Key", apitoken);
+            },
+            type: "POST",
+            data: makeblob(imgdata),
+            processData: false
+        }).done(function (data) {
+            var result = JSON.stringify(data);
+            console.log(result);
+            ShowInfo(data);
+            //return result;
+        }).fail(function (e) {
+            console.log(e);
+        });
+    }
+
+
+    var makeblob = function (dataURL) {
+        var base64val = ';base64,';
+        if (dataURL.indexOf(base64val) == -1) {
+            var parts = dataURL.split(',');
+            var contentType = parts[0].split(':')[1];
+            var raw = decodeURIComponent(parts[1]);
+            return new Blob([raw], { type: contentType });
+        }
+        var parts = dataURL.split(base64val);
+        var contentType = parts[0].split(':')[1];
+        var raw = window.atob(parts[1]);
+        var rawLength = raw.length;
+
+        var uInt8Array = new Uint8Array(rawLength);
+
+        for (var i = 0; i < rawLength; ++i) {
+            uInt8Array[i] = raw.charCodeAt(i);
+        }
+
+        return new Blob([uInt8Array], { type: contentType });
+    }
+
+    function ShowInfo(data) {
+        showinfodiv.innerHTML = "";
+
+        showinfodiv.innerHTML += "分類：" + data.categories[0].name + " (" + data.categories[0].score + ")";
+        showinfodiv.innerHTML += "<br>";
+        showinfodiv.innerHTML += "標籤：";
+
+        for (var i = 0; i < data.description.tags.length; i++) {
+            showinfodiv.innerHTML += "(" + data.description.tags[i] + ")";
+        }
+        showinfodiv.innerHTML += "<br>";
+        showinfodiv.innerHTML += "描述：" + data.description.captions[0].text + " (" + data.description.captions[0].confidence + ")";
+        showinfodiv.innerHTML += "<br>";
+        showinfodiv.innerHTML += "臉部：";
+        for (var i = 0; i < data.faces.length; i++) {
+            showinfodiv.innerHTML += "(年齡:" + data.faces[i].age + ")(性別:" + data.faces[i].gender + ")";
+        }
+        showinfodiv.innerHTML += "<br>";
+        if (data.isAdultContent) {
+            showinfodiv.innerHTML += "包含情色內容";
+        }
+        else {
+            showinfodiv.innerHTML += "不含情色內容";
+        }
+    }
+
+</script>
